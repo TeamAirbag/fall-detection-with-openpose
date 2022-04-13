@@ -93,6 +93,8 @@ if __name__ == '__main__':
                         x = a.x*image.shape[1]   # x coordinate relative to image 
                         y = a.y*image.shape[0]   # y coordinate relative to image
                         y1.append(y)   # store value of y coordinate in list to compare two frames
+                        print(human.body_parts[1])
+
                     except:
                         pass
                     if ((y - y1[-2]) > 25):  # it's distance between frame and comparing it with thresold value 
