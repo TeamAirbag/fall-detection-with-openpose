@@ -1,7 +1,13 @@
 import argparse
 import logging
 import time
+import math
+import datetime
+import pygame
+import pandas as pd
+import keyboard
 from pprint import pprint
+from sklearn.svm import SVC
 import cv2
 import numpy as np
 import sys
@@ -58,6 +64,20 @@ if __name__ == '__main__':
     count = 0
     y1 = [0,0]
     frame = 0
+
+    dataset = []
+    state = []          
+
+
+    ### 모델 학습
+    data = pd.read_csv("posedata.csv")
+    X, Y = data.iloc[:,:36], data['class']
+    x = X.to_numpy()
+    y = Y.to_numpy()
+    model = SVC(kernel='poly')
+    model.fit(x, y)
+
+
     while True:
         ret_val, image = cam.read()
         image = cv2.resize(image, dsize=(300, 300), interpolation=cv2.INTER_AREA)
@@ -103,36 +123,90 @@ if __name__ == '__main__':
                     
                         min_x,min_y,max_x,max_y=image.shape[1],image.shape[0],0,0
                         
-                        for BodyPart in human.body_parts.values():
+
+                        # for BodyPart in human.body_parts.values():
                             
-                            x=BodyPart.x
-                            y=BodyPart.y
-                            x = x*image.shape[1]   # x coordinate relative to image 
-                            y = y*image.shape[0]   # y coordinate relative to image
+                        #     x=BodyPart.x
+                        #     y=BodyPart.y
 
-                            min_x=min(min_x,x)
-                            min_y=min(min_y,y)
-                            max_x=max(max_x,x)
-                            max_y=max(max_y,y)
-                        print(min_x, min_y, max_x, max_y)
+                        #     # x = x*image.shape[1]   # x coordinate relative to image 
+                        #     # y = y*image.shape[0]   # y coordinate relative to image
 
-                        rec = (max_x-min_x)/(max_y-min_y)
-                       
+                        #     min_x=min(min_x,x)
+                        #     min_y=min(min_y,y)
+                        #     max_x=max(max_x,x)
+                        #     max_y=max(max_y,y)
+                        # # print(min_x, min_y, max_x, max_y)
+
+                        # rec = (max_x-min_x)/(max_y-min_y)
+
+
+
+                        # ### 데이터 저장
+                        # col_name = ['nose_x', 'nose_y', 'neck_x', 'neck_y', 'Rshoulder_x', 'Rshoulder_y', 'Relbow_x', 'Relbow_y', 'Rwrist_x', 'Rwrist_y',
+                        # 'Lshoulder_x', 'Lshoulder_y', 'Lelbow_x', 'Lelbow_y', 'Lwrist_x', 'Lwrist_y', 'Rhip_x', 'Rhip_y', 'Rknee_x', 'Rknee_y',
+                        # 'Rankle_x', 'Rankle_y', 'Lhip_x', 'Lhip_y', 'Lknee_x', 'Lknee_y', 'Lankle_x', 'Lankle_y', 'Reye_x', 'Reye_y',
+                        # 'Leye_x', 'Leye_y', 'Rear_x', 'Rear_y', 'Lear_x', 'Lear_y', 'class']
+
+                        # x1 = [0 for i in range(0,36)]
+                        # x1.append(0)  # 클래스, (stand : 0, sit:1, lie:2)
+                        # for j in range(0,34):
+                        #     if human.body_parts[j].x != None:
+                        #         x1[2*j] = human.body_parts[j].x
+                        #         x1[2*j+1] = human.body_parts[j].y
+                        #     dataset.append(x1)
+                        #     print(x1)
+                        #     if keyboard.is_pressed('q'):
+                        #         print('데이터 저장 DEMO')
+                        #         df_demo = pd.DataFrame(dataset, columns=col_name)
+                        #         df_demo.to_csv('C:\\Users\\dongik\\Desktop\\tf-pose-estimation-master\\data\\stand3.csv', sep=',')
+
+                        ## 실시간 좌표값 기반 모델 예측
+                        x1 = [0 for i in range(0,36)]       # 실시간 좌표값
+                        for j in range(0,34):
+                            if human.body_parts[j].x != None:
+                                x1[2*j] = human.body_parts[j].x
+                                x1[2*j+1] = human.body_parts[j].y
+                            result = model.predict([x1])
+                            if result == [0]:               # stand
+                                tt = "stand"
+                                state.append(0)
+                                begin = time.time()
+                            elif result == [1]:             # sit
+                                tt = "sit"
+                                state.append(1)
+                                begin = time.time()                                  
+                            elif result == [2]:             # lie
+                                tt = "lie"
+                                if len(state) != 0:
+                                    end = time.time()
+                                    if state[-1] == 0 or state[-1] == 1:   # 전 값이 서있는 상태 또는 앉아있는 상태
+                                        if (end-begin) <= 2:
+                                            print("fall이 출력되어야함")
+                                            tt = "fall"
+                                state = []
+                            elif result == [3]:             # normal
+                                tt = "normal"
+                                state = []
 
                     except:
                         pass
                     cv2.rectangle(image, (int(min_x), int(max_y)), (int(max_x), int(min_y)), (255,0,0), 1)
-                    if ((y - y1[-2]) > 25):  # it's distance between frame and comparing it with thresold value 
-                        cv2.putText(image, "Fall Detected", (20,50), cv2.FONT_HERSHEY_COMPLEX, 2.5, (0,0,255), 
-                            2, 11)
-                        print("fall detected.",i+1, count) # You can set count for get that your detection is working
+
+                    # if ((y - y1[-2]) > 25):  # it's distance between frame and comparing it with thresold value 
+                    #     cv2.putText(image, "Fall Detected", (20,50), cv2.FONT_HERSHEY_COMPLEX, 2.5, (0,0,255), 
+                    #         2, 11)
+                    #     print("fall detected.",i+1, count) # You can set count for get that your detection is working
     ###################################################################################################################
         elif mode == 0:	
         	pass
         cv2.putText(image,
                     "FPS: %f" % (1.0 / (time.time() - fps_time)),
-                    (10, 10),  cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    (10, 20),  cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                     (0, 255, 0), 2)
+
+        cv2.putText(image, tt, (10,60), cv2.FONT_HERSHEY_SIMPLEX, 1, (225,0,0), 3)
+
         cv2.imshow('tf-pose-estimation result', image)
         fps_time = time.time()
         # if(frame == 0) and (args.save_video):   # It's use to intialize video writer ones
